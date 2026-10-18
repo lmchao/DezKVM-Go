@@ -970,6 +970,9 @@ window.addEventListener('keydown', async (e) => {
     // Skip HID forwarding when typing in input fields
     if (isTypingInInput(e)) return;
 
+    // The Terminal tab (terminal.js) forwards its own input via xterm.js.
+    if (document.body.classList.contains('terminal-active')) return;
+
     // Stacked Keys interception (must run before Ctrl+V passthrough so that
     // keys can be stacked even when a modifier is part of the combination)
     if (handleStackKeydown(e)) return;
@@ -998,6 +1001,9 @@ window.addEventListener('keydown', async (e) => {
 window.addEventListener('keyup', async (e) => {
     // Skip HID forwarding when typing in input fields
     if (isTypingInInput(e)) return;
+
+    // The Terminal tab (terminal.js) forwards its own input via xterm.js.
+    if (document.body.classList.contains('terminal-active')) return;
 
     // Stacked Keys interception
     if (handleStackKeyup(e)) return;

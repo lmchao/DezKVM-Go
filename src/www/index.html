@@ -15,6 +15,8 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/fomantic-ui/2.9.4/semantic.min.js" integrity="sha512-Y/wIVu+S+XJsDL7I+nL50kAVFLMqSdvuLqF2vMoRqiMkmvcqFjEpEgeu6Rx8tpZXKp77J8OUpMKy0m3jLYhbbw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
         <!-- Custom Styles -->
         <link rel="stylesheet" href="main.css">
+        <!-- xterm.js (vendored) -->
+        <link rel="stylesheet" href="vendor/xterm/xterm.css">
     </head>
 <body>
     <!-- Browser Compatibility Warning -->
@@ -65,6 +67,8 @@
         <button id="btnOnscreenKeyboard" class="ui mini basic icon button" title="Toggle On-Screen Keyboard"><i class="keyboard outline icon"></i></button>
         <!-- Fullscreen -->
         <button id="fullscreenBtn" class="ui mini basic icon button" title="Fullscreen"><i class="expand icon"></i></button>
+        <!-- Terminal view -->
+        <button id="btnTerminalView" class="ui mini basic icon button" title="Terminal view"><i class="code icon"></i></button>
         <!-- Remap CTRL to CMD and CMD to CTRL -->
         <button id="btnCtrlCmdSwap" class="ui mini grey button" title="Swap Ctrl and Cmd keys" onclick="toggleCtrlCmdSwap()">CTRL ↔ CMD</button>
 
@@ -130,7 +134,20 @@
         </div>
     </div>
     
+    <!-- Terminal view -->
+    <div id="terminalPanel">
+        <div id="terminalToolbar">
+            <button id="btnTerminalBack" class="ui mini basic icon button" title="Back to video"><i class="video icon"></i></button>
+            <button id="btnTerminalCalibrate" class="ui mini basic button" title="Learn the remote font (types a lattice + reference grid into the remote)"><i class="crosshairs icon"></i> Calibrate</button>
+            <span id="terminalStatus">Terminal: not calibrated</span>
+        </div>
+        <div id="terminal"></div>
+    </div>
+
+    <script src="vendor/xterm/xterm.js"></script>
     <script src="local-kvm.js"></script>
+    <script src="terminal-core.js"></script>
+    <script src="terminal.js"></script>
     <script>
         // Check browser compatibility
         function checkBrowserCompatibility() {

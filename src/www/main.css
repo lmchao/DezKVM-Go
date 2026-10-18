@@ -618,3 +618,67 @@ body {
     background: #ffffff;
     border-radius: 6px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Terminal view                                                      */
+/* ------------------------------------------------------------------ */
+
+#terminalPanel {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 900; /* below #menu (1000), above video (0) / touchscreen (500) */
+    background: #000;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#terminalPanel.visible {
+    display: flex;
+}
+
+body.terminal-active {
+    overflow: hidden;
+}
+
+#terminalToolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* clear the fixed #menu bar */
+    padding: 58px 10px 6px 10px;
+    background: #1b1c1d;
+    color: #eeeeee;
+    flex: 0 0 auto;
+}
+
+#terminalStatus {
+    margin-left: auto;
+    font-size: 0.8em;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#terminal {
+    flex: 1 1 auto;
+    min-height: 0;       /* let the flex item shrink below its content */
+    overflow: hidden;    /* xterm manages its own viewport; no outer scrollbar */
+    padding: 4px 6px;
+    background: #000;
+}
+
+#terminal .xterm {
+    height: 100%;
+}
+
+/* No scrollback: hide xterm's viewport scrollbar (avoids a 2nd scrollbar). */
+#terminal .xterm .xterm-viewport {
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+}
+
+#terminal .xterm .xterm-viewport::-webkit-scrollbar {
+    display: none;
+}
