@@ -115,7 +115,6 @@ The generation 3 uses a newly designed PCB (rev2) with the MS2109S HDMI capture 
 ![pcb_update](img/README/pcb_update.jpg)
 
 
-
 ### Buy a Ready-to-use Device
 
 If you’d rather skip the build, I’ve put together some DezKVM Go devices that are ready to go. 
@@ -123,6 +122,19 @@ If you’d rather skip the build, I’ve put together some DezKVM Go devices tha
 You can find them on my Tindie store (limited availability):
 
 https://www.tindie.com/products/tobychui/dezkvm-go-kvm-over-usb-device/
+
+## Community Resources
+
+If you already own a DezKVM device, you might find these community conributed tools helpful :)
+
+**Contributed by @hartzell**
+
+- An application to set the baud rate and working mode for the CH9329
+  - [GitHub](https://github.com/hartzell/dezkvm-go-resetter)
+- A 3d-printable "rugged box" to hold the device and cables:
+  -  [GitHub](https://github.com/hartzell/dezkvm-go-rugged-box)
+  -  [Printables](https://www.printables.com/model/1880848-rugged-box-for-dezkvm-go).
+
 
 ## License
 
