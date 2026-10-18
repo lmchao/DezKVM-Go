@@ -63,12 +63,14 @@ Key flags:
 
 ### Controls
 
-Inside the TUI, keystrokes are forwarded to the remote machine. The bottom status bar shows the remote grid size vs. your local view.
+Inside the TUI, keystrokes are forwarded to the remote machine. The bottom status bar shows the remote grid size, the viewport, and the keyboard state.
 
-- **Ctrl+Q** — quit `kvmterm`
-- Everything else (printable chars, Enter, Backspace, arrows, Tab, Delete, Home/End/PgUp/PgDn, Escape, and Ctrl+letter combos) is forwarded to the remote terminal.
+- **F2** — connect/disconnect the keyboard. Disconnecting **closes the CH9329 serial port**, releasing it so another process (e.g. the browser control panel) can take over; reconnecting reopens and re-warms it. The status bar shows `kb connected` / `kb DISCONNECTED` (reconnect shows `kb connecting…`). While disconnected, keystrokes are **not** forwarded.
+- **PageUp / PageDown** — scroll the local viewport.
+- **Ctrl+Q** — quit `kvmterm`.
+- Everything else (printable chars, Enter, Backspace, arrows, Tab, Delete, Home/End, Escape, and Ctrl+letter combos) is forwarded to the remote terminal.
 
-The remote grid is rendered 1:1 into your terminal from the top-left. If the remote is larger than your terminal (e.g. a 240×67 console vs. an 80×24 window), enlarge your terminal or reduce its font to see more. Viewport scrolling is a planned follow-up.
+The remote grid is rendered 1:1 into your terminal from the top-left. If the remote is larger than your terminal (e.g. a 240×67 console vs. an 80×24 window), enlarge your terminal or reduce its font to see more.
 
 ## Notes & limitations
 

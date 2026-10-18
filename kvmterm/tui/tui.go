@@ -24,6 +24,11 @@ type App struct {
 	last     *screen.Text
 	quit     bool
 
+	// Keyboard connection state (owned by the event loop).
+	connected    bool
+	reconnecting bool
+	lastErr      string
+
 	// Viewport over the (possibly larger) remote grid.
 	viewRow      int  // top remote row shown
 	followBottom bool // auto-scroll to keep the last content visible
@@ -32,7 +37,10 @@ type App struct {
 
 // New builds an App. interval is the background frame-poll period.
 func New(kb *hid.Keyboard, grab *framegrab.Grabber, cal *screen.Calibration, interval time.Duration) *App {
-	return &App{kb: kb, grab: grab, cal: cal, interval: interval, followBottom: true, lastViewRow: -1}
+	return &App{
+		kb: kb, grab: grab, cal: cal, interval: interval,
+		connected: true, followBottom: true, lastViewRow: -1,
+	}
 }
 
 // frameEvent is posted to the tcell event loop when a fresh frame is ready.
@@ -42,6 +50,15 @@ type frameEvent struct {
 }
 
 func (e frameEvent) When() time.Time { return e.when }
+
+// keyStateEvent is posted when a keyboard connect/disconnect completes.
+type keyStateEvent struct {
+	when      time.Time
+	connected bool
+	err       error
+}
+
+func (e keyStateEvent) When() time.Time { return e.when }
 
 // Run starts the event loop and blocks until the user quits (Ctrl+Q).
 func (a *App) Run() error {
@@ -91,6 +108,17 @@ func (a *App) Run() error {
 			}
 		case frameEvent:
 			a.draw(ev.text)
+		case keyStateEvent:
+			a.reconnecting = false
+			a.connected = ev.connected
+			if ev.err != nil {
+				a.lastErr = ev.err.Error()
+			} else {
+				a.lastErr = ""
+			}
+			if a.last != nil {
+				a.draw(a.last)
+			}
 		}
 	}
 	return nil
@@ -109,6 +137,14 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return false
 	case tcell.KeyPgDn:
 		a.scroll(1)
+		return false
+	case tcell.KeyF2:
+		a.toggleKeyboard()
+		return false
+	}
+
+	// While the keyboard is closed, don't forward anything to the remote.
+	if !a.connected {
 		return false
 	}
 
@@ -147,6 +183,36 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		}
 	}
 	return true
+}
+
+// toggleKeyboard connects or disconnects the CH9329 serial keyboard (F2).
+// Disconnecting closes the port so another process — e.g. the browser control
+// panel — can take over the device; reconnecting reopens and re-warms it. The
+// reconnect runs in the background so the UI stays responsive.
+func (a *App) toggleKeyboard() {
+	if a.reconnecting {
+		return
+	}
+	if a.connected {
+		if err := a.kb.Close(); err != nil {
+			a.lastErr = err.Error()
+		} else {
+			a.lastErr = ""
+		}
+		a.connected = false
+		if a.last != nil {
+			a.draw(a.last)
+		}
+		return
+	}
+	a.reconnecting = true
+	if a.last != nil {
+		a.draw(a.last)
+	}
+	go func() {
+		err := a.kb.Reconnect()
+		a.sc.PostEvent(keyStateEvent{when: time.Now(), connected: err == nil, err: err})
+	}()
 }
 
 // scroll moves the local viewport by dir pages (-1 up, +1 down). Scrolling to
@@ -226,8 +292,18 @@ func (a *App) draw(t *screen.Text) {
 	if !a.followBottom {
 		scrollTag = fmt.Sprintf("@%d", a.viewRow)
 	}
-	status := fmt.Sprintf("remote %dx%d | view %dx%d %s | PgUp/PgDn scroll | Ctrl+Q quit",
-		t.Cols, t.Rows, w, viewH, scrollTag)
+	kbState := "kb connected"
+	switch {
+	case a.reconnecting:
+		kbState = "kb connecting..."
+	case !a.connected:
+		kbState = "kb DISCONNECTED"
+		if a.lastErr != "" {
+			kbState = "kb " + a.lastErr
+		}
+	}
+	status := fmt.Sprintf("remote %dx%d | view %dx%d %s | %s | F2 kb on/off | PgUp/Dn scroll | Ctrl+Q quit",
+		t.Cols, t.Rows, w, viewH, scrollTag, kbState)
 	statusStyle := tcell.StyleDefault.Reverse(true)
 	for c := 0; c < w; c++ {
 		ch := ' '
