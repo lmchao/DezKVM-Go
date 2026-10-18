@@ -6,3 +6,4 @@ src/README.md
 /3D Models/OldVersions
 src/usbkvm.exe~
 src/usbkvm
+*.pem
