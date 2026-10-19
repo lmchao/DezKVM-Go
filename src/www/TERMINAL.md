@@ -105,14 +105,19 @@ you cannot tolerate that.
 
 ## Limits
 
-- **Plain/white text is exact; colored text is lossy.** Reconstruction is
-  brightness-based. Colored text — especially dim colors like dark-blue IPv6
-  addresses from `ip -c` — can render as `?`. This is a limitation of the cheap
-  MJPEG capture card (chroma "ringing" around colored glyphs), not something the
-  terminal can fully fix. Prefer commands that output plain text.
+- **Plain/white text is exact; colored text is flattened to ink/no-ink.** Each
+  cell is binarized with an adaptive threshold (midpoint of the cell's own
+  brightness range), so dim colored text — like the dark-blue addresses `ip`
+  prints — decodes like white text instead of turning into `?`. Very faint or
+  chroma-smeared glyphs can still decode wrong. Prefer commands that output
+  plain text for the cleanest result.
 - **The grid is fixed to the remote console.** Calibration reports the actual
   size (typically 240×67 at 1920×1080, cell 8×16). A font change means
   re-calibration, not a resize.
+- **One pixel of horizontal drift is tolerated.** Sub-pixel cell widths and video
+  scaling shift the text grid across a long line; cells that fail to match are
+  retried against left/right shifted templates, which is what used to turn long
+  `ip` addresses into `???????.?/8`. Larger drift still needs re-calibration.
 - **The font is height-limited on wide windows.** The terminal fits both
   dimensions, so on a wide/short browser window the effective font can be small.
   Enlarge the window or use a larger display.

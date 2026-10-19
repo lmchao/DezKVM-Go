@@ -96,7 +96,10 @@ func Calibrate(kb *hid.Keyboard, grab *framegrab.Grabber) (*Calibration, error) 
 
 	cal := buildCalibration(w, h, cellW, cellH, px, py, thr, dark)
 	for c := 0; c <= 94; c++ {
-		g := extractGlyph(mask2, w, px+c*cellW, py+R*cellH, cellW, cellH)
+		g, ok := cellGlyph(img2, px+c*cellW, py+R*cellH, cellW, cellH, dark)
+		if !ok {
+			g = glyph{w: cellW, h: cellH, rows: make([]uint64, cellH)}
+		}
 		cal.LearnGlyph(byte(32+c), g)
 	}
 	fmt.Printf("calibrate: learned 95 glyphs (reference row %d)\n", R)

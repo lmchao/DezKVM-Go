@@ -55,11 +55,9 @@ func brightness(r, g, b uint8) uint8 {
 // background from its text, plus the polarity (dark background = bright text).
 //
 // The threshold is the midpoint between the background and the mean text
-// brightness. This is tuned for the common case (plain/white terminal text),
-// which renders cleanly. Dim colored text (e.g. dark blue IPv6 addresses) can
-// fall below it and render as '?'; the cheap MJPEG capture card adds edge
-// ringing to colored glyphs, so no single brightness threshold can cleanly
-// separate dim color from that ringing (see README "Limitations").
+// brightness, biased 40% of the way toward the background. It is used for grid
+// detection and polarity at calibration; render() ignores it in favour of a
+// per-cell adaptive threshold (see cellGlyph).
 func detectThreshold(img *image.RGBA) (thr uint8, dark bool) {
 	var hist [256]int
 	for i := 0; i < len(img.Pix); i += 4 {
@@ -89,12 +87,16 @@ func detectThreshold(img *image.RGBA) (thr uint8, dark bool) {
 	}
 	if cnt == 0 {
 		if dark {
-			return uint8(bg + 60), true
+			return uint8(bg + 40), true
 		}
-		return uint8(bg - 60), false
+		return uint8(bg - 40), false
 	}
 	fg := int(sum / cnt)
-	return uint8((bg + fg) / 2), dark
+	// Bias the threshold toward the background: 40% of the way from bg to the
+	// mean text brightness instead of the 50% midpoint. The midpoint sits too
+	// close to dim colored text (e.g. `ip`'s dark-blue addresses), whose
+	// strokes peak well below white and get clipped by the midpoint threshold.
+	return uint8(bg + (fg-bg)*2/5), dark
 }
 
 // binarize converts an image to a 1-bit ink mask using a fixed threshold.
@@ -213,12 +215,74 @@ func extractGlyph(mask []uint8, imgW, x0, y0, cw, ch int) glyph {
 	return g
 }
 
+// cellGlyph extracts a cell from the raw image using an adaptive, per-cell
+// threshold (midpoint of the cell's own brightness range). A fixed global
+// threshold clips dim colored text (e.g. `ip`'s dark-blue addresses); matching
+// at the cell's own midpoint makes dim text binarize like white text. ok is
+// false for a blank cell.
+func cellGlyph(img *image.RGBA, x0, y0, cw, ch int, dark bool) (glyph, bool) {
+	mn, mx := 255, 0
+	for r := 0; r < ch; r++ {
+		base := img.PixOffset(x0, y0+r)
+		for c := 0; c < cw; c++ {
+			p := base + c*4
+			b := int(brightness(img.Pix[p], img.Pix[p+1], img.Pix[p+2]))
+			if b < mn {
+				mn = b
+			}
+			if b > mx {
+				mx = b
+			}
+		}
+	}
+	if mx-mn < 48 {
+		return glyph{}, false
+	}
+	thr := (mn + mx) / 2
+	g := glyph{w: cw, h: ch, rows: make([]uint64, ch)}
+	for r := 0; r < ch; r++ {
+		base := img.PixOffset(x0, y0+r)
+		var row uint64
+		for c := 0; c < cw; c++ {
+			p := base + c*4
+			b := int(brightness(img.Pix[p], img.Pix[p+1], img.Pix[p+2]))
+			on := dark && b >= thr || !dark && b <= thr
+			if on {
+				row |= 1 << uint(c)
+			}
+		}
+		g.rows[r] = row
+	}
+	return g, true
+}
+
 func (g glyph) inkCount() int {
 	n := 0
 	for _, r := range g.rows {
 		n += bits.OnesCount64(r)
 	}
 	return n
+}
+
+// isCursor reports whether the glyph is a console cursor artifact — an
+// underline confined to the bottom rows, or a nearly filled block — rather
+// than a printable character.
+func (g glyph) isCursor() bool {
+	total, bottom := 0, 0
+	for r, row := range g.rows {
+		n := bits.OnesCount64(row)
+		total += n
+		if r >= g.h-2 {
+			bottom += n
+		}
+	}
+	if total == 0 {
+		return false
+	}
+	if total >= g.w*g.h*7/10 {
+		return true
+	}
+	return bottom == total && total >= g.w/2
 }
 
 func glyphDistance(a, b glyph) int {
@@ -228,6 +292,40 @@ func glyphDistance(a, b glyph) int {
 	d := 0
 	for i := range a.rows {
 		d += bits.OnesCount64(a.rows[i] ^ b.rows[i])
+	}
+	return d
+}
+
+// shiftH returns the glyph moved dx pixels horizontally (+1 = right), clipped
+// to the cell. A drifting text grid means a cell can be a shifted copy of the
+// learned template.
+func (g glyph) shiftH(dx int) glyph {
+	out := glyph{w: g.w, h: g.h, rows: make([]uint64, len(g.rows))}
+	var mask uint64 = ^uint64(0)
+	if g.w < 64 {
+		mask = (uint64(1) << uint(g.w)) - 1
+	}
+	for i, row := range g.rows {
+		if dx > 0 {
+			out.rows[i] = (row << uint(dx)) & mask
+		} else {
+			out.rows[i] = row >> uint(-dx)
+		}
+	}
+	return out
+}
+
+// glyphDistanceBounded stops as soon as it cannot beat cut.
+func glyphDistanceBounded(a, b glyph, cut int) int {
+	if a.w != b.w || a.h != b.h {
+		return int(^uint(0) >> 2)
+	}
+	d := 0
+	for i := range a.rows {
+		d += bits.OnesCount64(a.rows[i] ^ b.rows[i])
+		if d > cut {
+			return d
+		}
 	}
 	return d
 }
@@ -258,10 +356,33 @@ func (c *Calibration) LearnGlyph(code byte, g glyph) {
 	c.glyphs[code] = &gc
 }
 
+// glyphTpl bundles a learned glyph with its drift-shifted variants so the
+// per-cell matcher does not rebuild them for every cell of every frame.
+type glyphTpl struct {
+	code       byte
+	base, l, r glyph
+	ink        int
+}
+
+func newGlyphTpl(code byte, g glyph) glyphTpl {
+	return glyphTpl{
+		code: code,
+		base: g,
+		l:    g.shiftH(-1),
+		r:    g.shiftH(1),
+		ink:  g.inkCount(),
+	}
+}
+
 // Render converts a captured frame into a text grid by matching every cell
-// against the learned glyphs.
+// against the learned glyphs. Cells are binarized with an adaptive per-cell
+// threshold (see cellGlyph), so dim colored text decodes like white text.
 func (c *Calibration) Render(img *image.RGBA) *Text {
-	mask := binarize(img, c.Threshold, c.Dark)
+	tpls := make([]glyphTpl, 0, len(c.glyphs))
+	for code, g := range c.glyphs {
+		tpls = append(tpls, newGlyphTpl(code, *g))
+	}
+
 	t := &Text{Cols: c.Cols, Rows: c.Rows, Chars: make([][]byte, c.Rows)}
 
 	for r := 0; r < c.Rows; r++ {
@@ -269,25 +390,66 @@ func (c *Calibration) Render(img *image.RGBA) *Text {
 		for col := 0; col < c.Cols; col++ {
 			x0 := c.OriginX + col*c.CellW
 			y0 := c.OriginY + r*c.CellH
-			g := extractGlyph(mask, c.imgW, x0, y0, c.CellW, c.CellH)
-			if g.inkCount() == 0 {
-				t.Chars[r][col] = ' '
-				continue
+			g, ok := cellGlyph(img, x0, y0, c.CellW, c.CellH, c.Dark)
+			code := byte(' ')
+			if ok {
+				code = matchGlyph(g, tpls)
 			}
-			bestCode := byte('?')
-			bestDist := int(^uint(0) >> 1)
-			for code, tpl := range c.glyphs {
-				d := glyphDistance(g, *tpl)
-				if d < bestDist {
-					bestDist, bestCode = d, code
-				}
+			if code == 0 {
+				code = '?'
 			}
-			// Reject poor matches (unknown glyphs, e.g. box-drawing chars).
-			if bestDist > g.inkCount()/3 {
-				bestCode = '?'
-			}
-			t.Chars[r][col] = bestCode
+			t.Chars[r][col] = code
 		}
 	}
 	return t
+}
+
+// matchGlyph returns the best character for a cell bitmap, ' ' when the cell
+// is blank, '?' when nothing matches.
+func matchGlyph(g glyph, tpls []glyphTpl) byte {
+	ink := g.inkCount()
+	if ink == 0 {
+		return ' '
+	}
+	if g.isCursor() {
+		return '_'
+	}
+
+	bestCode := byte('?')
+	bestDist := int(^uint(0) >> 1)
+	for _, tp := range tpls {
+		if abs(tp.ink-ink) > ink/2+2 {
+			continue
+		}
+		if d := glyphDistance(g, tp.base); d < bestDist {
+			bestDist, bestCode = d, tp.code
+		}
+	}
+	// Tolerate one pixel of horizontal drift: video scaling and sub-pixel cell
+	// widths slide the grid across a long line, so thin glyphs (digits, '.')
+	// match a neighbouring character or nothing at all.
+	if bestDist > 0 {
+		for _, tp := range tpls {
+			if abs(tp.ink-ink) > ink/2+2 {
+				continue
+			}
+			if d := glyphDistanceBounded(g, tp.l, bestDist); d < bestDist {
+				bestDist, bestCode = d, tp.code
+			}
+			if d := glyphDistanceBounded(g, tp.r, bestDist); d < bestDist {
+				bestDist, bestCode = d, tp.code
+			}
+		}
+	}
+	if bestDist > max(2, ink/3) {
+		return '?'
+	}
+	return bestCode
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

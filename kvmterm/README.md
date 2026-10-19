@@ -76,7 +76,14 @@ The remote grid is rendered 1:1 into your terminal from the top-left. If the rem
 
 - **Prerequisites**: the remote machine must be at a text terminal (e.g. a Linux getty / Proxmox console) for calibration to work. The serial port must not be held by another process (e.g. the DezKVM-Go web UI in a browser).
 - **Font**: calibration learns whatever monospace font the remote uses, so it adapts to different consoles. Glyphs outside printable ASCII (box-drawing, the block cursor, etc.) render as `?`.
-- **Colored text** is flattened to ink/no-ink; color is not reconstructed. Dim colored text (e.g. `ip -c` IPv6 addresses rendered in dark blue) can fall below the binarization threshold and render as `?`. This is a hardware artifact: the MS2109's MJPEG capture adds edge "ringing" to colored glyphs, so no single brightness threshold can cleanly separate dim color from that ringing while keeping plain text sharp. Plain/white text (the common case — shell output, `ls`, `cat`, …) is reconstructed exactly.
+- **Colored text is flattened to ink/no-ink; color is not reconstructed.** The
+  matcher binarizes each cell with an adaptive threshold (the midpoint of that
+  cell's own brightness range) instead of a single fixed threshold, so dim
+  colored text — e.g. the dark-blue addresses `ip` prints — decodes like plain
+  white text. Very faint or heavily smeared glyphs (deep chroma ringing on the
+  MS2109) can still decode wrong. Plain/white text (the common case — shell
+  output, `ls`, `cat`, …) is reconstructed exactly.
+- **One pixel of grid drift is tolerated.** Sub-pixel cell widths and video scaling slide the text grid sideways across a long line; the matcher retries cells against left/right shifted templates, so a long address no longer collapses into `???????.?/8`. More than a pixel of drift still needs a re-calibration.
 - The remote is a *video* terminal, so this is fundamentally a screen reader + keyboard writer — it is not a serial console or SSH. For machines with working SSH, that is still the better tool; `kvmterm` is for when only the KVM path is available (BIOS, boot, no network, broken SSH).
 
 ## Packages

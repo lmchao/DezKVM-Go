@@ -47,8 +47,7 @@ self.onmessage = function (e) {
     if (msg.type === 'render') {
       if (!cal) { self.postMessage({ type: 'error', message: 'no calibration' }); return; }
       var img = imageDataOf(msg.frame);
-      var mask = TerminalCore.binarize(img, cal.threshold, cal.dark);
-      var out = TerminalCore.render(mask, img.width, cal);
+      var out = TerminalCore.render(img, cal);
       self.postMessage({ type: 'rendered', out: out }, [out.cells.buffer]);
       return;
     }
