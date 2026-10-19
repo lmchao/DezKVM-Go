@@ -626,8 +626,8 @@ body {
 #terminalPanel {
     display: none;
     position: fixed;
-    inset: 0;
-    z-index: 900; /* below #menu (1000), above video (0) / touchscreen (500) */
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 900; /* below #menu (1000): the menu overlaps the terminal's top */
     background: #000;
     flex-direction: column;
     overflow: hidden;
@@ -645,11 +645,37 @@ body.terminal-active {
     display: flex;
     align-items: center;
     gap: 8px;
-    /* clear the fixed #menu bar */
-    padding: 58px 10px 6px 10px;
+    padding: 6px 10px;
     background: #1b1c1d;
     color: #eeeeee;
     flex: 0 0 auto;
+    order: 2; /* bottom bar, so the overlapping menu doesn't cover it */
+}
+
+/* Make the toolbar controls clearly visible on the dark bar. */
+#terminalToolbar .button {
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+#terminalToolbar .button:hover {
+    background: rgba(255, 255, 255, 0.22) !important;
+    border-color: #ffffff !important;
+}
+#terminalToolbar .button i.icon {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+#terminalToolbar #btnTerminalCalibrate {
+    background: #1f6feb !important;
+    border-color: #1f6feb !important;
+    color: #ffffff !important;
+    font-weight: 600;
+}
+#terminalToolbar #btnTerminalCalibrate:hover {
+    background: #388bfd !important;
+    border-color: #388bfd !important;
 }
 
 #terminalStatus {
