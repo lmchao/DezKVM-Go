@@ -12,7 +12,7 @@
  *   {type:'error', message}
  */
 'use strict';
-importScripts('terminal-core.js');
+importScripts('terminal-core.js?v=4');
 
 var canvas = null;
 var ctx = null;

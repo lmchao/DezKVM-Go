@@ -295,7 +295,7 @@
   function init() {
     if (typeof Worker === 'undefined' || typeof TerminalCore === 'undefined') return;
 
-    worker = new Worker('terminal-worker.js');
+    worker = new Worker('terminal-worker.js?v=4');
     worker.onmessage = function (e) {
       var m = e.data;
       if (m.type === 'calibrated') onCalibrated(m.cal);
